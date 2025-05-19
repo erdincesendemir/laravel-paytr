@@ -3,8 +3,8 @@
 namespace ErdincEsendemir\PayTR\Services;
 
 use ErdincEsendemir\PayTR\Contracts\PayTRInterface;
-use Illuminate\Support\Facades\Http;
 use ErdincEsendemir\PayTR\Helpers\HashGenerator;
+use GuzzleHttp\Client;
 
 class PayTRManager implements PayTRInterface
 {
@@ -15,19 +15,19 @@ class PayTRManager implements PayTRInterface
         $this->config = $config;
     }
 
-    /**
-     * Generate token for payment request.
-     */
     public function generateToken(array $data): string
     {
         return HashGenerator::make($data, $this->config);
     }
 
-    /**
-     * Send payment initialization request to PayTR.
-     */
     public function initPayment(array $payload): array
     {
+        // Basket encode işlemi
+        $payload['user_basket'] = base64_encode(json_encode(
+            json_decode(base64_decode($payload['user_basket']), true),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
+
         $token = $this->generateToken($payload);
 
         $requestData = array_merge($payload, [
@@ -36,34 +36,19 @@ class PayTRManager implements PayTRInterface
             'test_mode' => $this->config['test_mode'] ? 1 : 0,
         ]);
 
-        $response = Http::asForm()->post('https://www.paytr.com/odeme/api/get-token', $requestData);
+        $client = new Client();
 
-        if ($response->failed()) {
-            throw new \Exception('PayTR API error: ' . $response->body());
-        }
+        $response = $client->post('https://www.paytr.com/odeme/api/get-token', [
+            'form_params' => $requestData,
+            'headers' => [
+                'Content-Type' => 'application/x-www-form-urlencoded'
+            ],
+            'http_errors' => false
+        ]);
 
-        return $response->json();
+        return json_decode($response->getBody()->getContents(), true);
     }
 
-    /**
-     * Verify callback response from PayTR.
-     */
-    public function verifyCallback(array $postData): bool
-    {
-        $expectedHash = base64_encode(
-            hash_hmac(
-                'sha256',
-                $postData['merchant_oid'] .
-                $this->config['merchant_salt'] .
-                $postData['status'] .
-                $postData['total_amount'],
-                $this->config['merchant_key'],
-                true
-            )
-        );
-
-        return isset($postData['hash']) && $postData['hash'] === $expectedHash;
-    }
     public function binCheck(string $binNumber): array
     {
         $tokenStr = $this->config['merchant_id'] . $binNumber . $this->config['merchant_salt'];
@@ -78,13 +63,16 @@ class PayTRManager implements PayTRInterface
             'paytr_token' => $paytrToken,
         ];
 
-        $response = Http::asForm()->post('https://www.paytr.com/odeme/api/bin-detail', $data);
+        $client = new Client();
 
-        if ($response->failed()) {
-            throw new \Exception('PayTR binCheck failed: ' . $response->body());
-        }
+        $response = $client->post('https://www.paytr.com/odeme/api/bin-detail', [
+            'form_params' => $data,
+            'headers' => [
+                'Content-Type' => 'application/x-www-form-urlencoded'
+            ],
+            'http_errors' => false
+        ]);
 
-        return $response->json();
+        return json_decode($response->getBody()->getContents(), true);
     }
-
 }
