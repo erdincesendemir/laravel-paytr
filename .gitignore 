@@ -1,0 +1,31 @@
+# Laravel & Composer
+/vendor
+/node_modules
+.env
+.env.*.backup
+.DS_Store
+/public/storage
+/storage/*.key
+/storage/app/public
+/storage/debugbar
+
+# PhpStorm / JetBrains
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+
+# OS ve log dosyaları
+*.log
+*.swp
+*.swo
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Git
+.gitignore
+
+# Composer ile cache
+composer.lock
